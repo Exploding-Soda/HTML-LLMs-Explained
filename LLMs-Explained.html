@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>词频统计与生成</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .char-item {
+        display: inline-block;
+        margin: 10px;
+        padding: 5px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
+      .char-item p {
+        margin: 5px 0;
+      }
+      .char-item span {
+        font-weight: bold;
+      }
+      .generated-sentence {
+        margin-top: 20px;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>词频统计与句子生成</h1>
+
+    <!-- 原输入框，用于词频统计 -->
+    <input
+      type="text"
+      id="inputText"
+      placeholder="学习数据，在这里放入你的'数据集'供学习，可以是一篇文章"
+      style="width: 100%; padding: 10px"
+    />
+
+    <!-- 显示统计结果 -->
+    <div id="result"></div>
+
+    <!-- 新的输入框，用于生成句子 -->
+    <input
+      type="text"
+      id="generateInput"
+      placeholder="输入学习数据中出现过的字，然后点击生成来尝试生成一句完整的句子，多次点击来获得不同的效果"
+      style="width: 100%; padding: 10px; margin-top: 20px"
+    />
+
+    <!-- 生成按钮 -->
+    <button id="generateBtn" style="padding: 10px 20px; margin-top: 10px">
+      生成
+    </button>
+
+    <!-- 显示生成的句子 -->
+    <div id="generatedSentence" class="generated-sentence"></div>
+
+    <script>
+      // 存储每个字的后继字频次
+      let charFreq = [];
+
+      // 监听输入框的变化
+      document
+        .getElementById("inputText")
+        .addEventListener("input", function (event) {
+          const text = event.target.value;
+          charFreq = []; // 每次输入更新时清空统计结果
+          analyzeText(text);
+          renderResults();
+        });
+
+      // 解析文本
+      function analyzeText(text) {
+        // 统计每个字后面跟着的字的出现次数
+        for (let i = 0; i < text.length - 1; i++) {
+          const currentChar = text[i];
+          const nextChar = text[i + 1];
+
+          // 查找该字是否已经存在于 charFreq 数组中
+          let charEntry = charFreq.find((entry) => entry.text === currentChar);
+
+          if (!charEntry) {
+            // 如果该字还没有记录，创建一个新的记录
+            charEntry = {
+              text: currentChar,
+              nextChars: {},
+            };
+            charFreq.push(charEntry);
+          }
+
+          // 如果后继字已经出现过，则增加出现次数
+          if (charEntry.nextChars[nextChar]) {
+            charEntry.nextChars[nextChar]++;
+          } else {
+            // 否则初始化为1
+            charEntry.nextChars[nextChar] = 1;
+          }
+        }
+
+        // 根据出现次数来计算权重
+        charFreq.forEach((entry) => {
+          const totalCount = Object.values(entry.nextChars).reduce(
+            (sum, count) => sum + count,
+            0
+          );
+          entry.nextChars = Object.keys(entry.nextChars).map((nextChar) => {
+            return {
+              innerText: nextChar,
+              weight: (entry.nextChars[nextChar] / totalCount).toFixed(2), // 权重是该字后继字的出现次数占总次数的比例
+            };
+          });
+        });
+      }
+
+      // 渲染结果到页面
+      function renderResults() {
+        const resultDiv = document.getElementById("result");
+        resultDiv.innerHTML = ""; // 清空旧的内容
+
+        charFreq.forEach((charEntry) => {
+          const charDiv = document.createElement("div");
+          charDiv.className = "char-item";
+
+          const charText = document.createElement("p");
+          charText.innerText = `${charEntry.text}`;
+          charDiv.appendChild(charText);
+
+          charEntry.nextChars.forEach((nextCharEntry) => {
+            const nextCharText = document.createElement("p");
+            nextCharText.innerHTML = `${nextCharEntry.innerText} =  ${nextCharEntry.weight}`;
+            charDiv.appendChild(nextCharText);
+          });
+
+          resultDiv.appendChild(charDiv);
+        });
+      }
+
+      // 生成按钮事件处理
+      document
+        .getElementById("generateBtn")
+        .addEventListener("click", function () {
+          const inputText = document.getElementById("generateInput").value;
+          if (inputText.length === 0) {
+            alert("请输入一个字来生成句子");
+            return;
+          }
+
+          const lastChar = inputText[inputText.length - 1];
+          const generatedSentence = generateSentence(lastChar);
+          document.getElementById("generatedSentence").innerText =
+            generatedSentence || "无法生成句子，可能没有足够的数据";
+        });
+
+      // 根据最后一个字生成一句话
+      function generateSentence(lastChar) {
+        const inputTextLength =
+          document.getElementById("inputText").value.length;
+        const maxLength = Math.floor(inputTextLength / 2); // 最大长度是输入框字数的一半
+
+        let currentChar = lastChar;
+        let sentence = currentChar;
+
+        // 生成句子
+        while (sentence.length < maxLength) {
+          const charEntry = charFreq.find(
+            (entry) => entry.text === currentChar
+          );
+          if (!charEntry || charEntry.nextChars.length === 0) {
+            break;
+          }
+
+          // 获取所有后继字的权重
+          const nextCharEntries = charEntry.nextChars;
+
+          // 计算所有权重的总和
+          const totalWeight = nextCharEntries.reduce(
+            (sum, entry) => sum + parseFloat(entry.weight),
+            0
+          );
+
+          // 生成一个随机数来选择下一个字
+          const randomValue = Math.random() * totalWeight;
+          let accumulatedWeight = 0;
+          let nextChar = null;
+
+          // 根据权重分布选择下一个字
+          for (const entry of nextCharEntries) {
+            accumulatedWeight += parseFloat(entry.weight);
+            if (accumulatedWeight >= randomValue) {
+              nextChar = entry.innerText;
+              break;
+            }
+          }
+
+          sentence += nextChar;
+          currentChar = nextChar;
+        }
+
+        return sentence;
+      }
+
+      let textString = `
+    
+    当今输入法的下一次预测是基于大量语言模型和机器学习技术的结合。它们通过分析用户的输入历史、上下文和习惯，预测接下来可能打出的词汇或短语。具体来说，当用户键入一个字母或一个词时，输入法系统会通过已有的数据库和算法，推算出最有可能的词组，并以此为基础生成预测结果。这些系统不仅仅依赖于单一的规则，而是借助庞大的数据集和深度学习模型，通过不断学习用户输入的模式，进行精准的推测。通过这种方式，输入法可以提供越来越智能、个性化的预测，甚至在某些情况下，能够预判用户的意图或是下一句的结构，从而大大提高输入的效率和准确性。
+    
+    `;
+    </script>
+  </body>
+</html>
